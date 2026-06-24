@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neural Data Spine // Standalone Co-Design Studio</title>
+  
+  <!-- CSS Styles -->
+  <style>
+    /* --- CORE SYSTEM RESET --- */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --neon-green: #00ff9f;
+      --neon-yellow: #ffd700;
+      --neon-cyan: #00d4ff;
+      --neon-purple: #a855f7;
+      --neon-red: #ff4b5c;
+      --bg-dark: #010603;
+      --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      color: #e2e8f0;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* --- CANVAS LAYERS --- */
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #pcb-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #three-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    /* --- SCANLINE & AMBIENCE --- */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(0, 255, 159, 0.05) 3px,
+        transparent 4px
+      );
+      background-size: 100% 4px;
+      opacity: 0.8;
+    }
+
+    /* --- HUD HEADER --- */
+    .hud-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      padding: 24px;
+      pointer-events: none;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-group {
+      pointer-events: auto;
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: #ffffff;
+      text-shadow: 0 0 10px var(--neon-cyan), 0 0 30px rgba(0, 212, 255, 0.4);
+    }
+
+    .brand-subtitle {
+      font-size: 9px;
+      color: var(--neon-yellow);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-top: 4px;
+      font-weight: bold;
+    }
+
+    .header-diagnostics {
+      text-align: right;
+    }
+
+    .diag-line {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: rgba(0, 255, 159, 0.6);
+      margin-bottom: 2px;
+    }
+
+    .diag-line span {
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    /* --- SIDEBAR WORKSPACE TRIGGER --- */
+    .hud-instructions {
+      position: fixed;
+      right: 24px;
+      top: 120px;
+      z-index: 30;
+      width: 260px;
+      background: rgba(1, 10, 5, 0.7);
+      border: 1px solid rgba(0, 255, 159, 0.15);
+      border-radius: 8px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .instructions-title {
+      font-size: 10px;
+      color: var(--neon-yellow);
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-b: 1px solid rgba(0, 255, 159, 0.15);
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+
+    .instructions-body {
+      font-size: 11px;
+      line-height: 1.6;
+      color: #94a3b8;
+    }
+
+    .instructions-body span {
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    /* --- BOTTOM MARQUEE BAR --- */
+    .hud-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      padding: 12px 24px;
+      background: rgba(0, 0, 0, 0.9);
+      border-top: 1px solid #1f2937;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-ticker {
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--neon-cyan);
+    }
+
+    .footer-hint {
+      font-size: 9px;
+      color: var(--neon-green);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* --- FULL SCREEN OVERLAY DIALOGS --- */
+    .overlay-container {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .overlay-container.active {
+      display: flex;
+    }
+
+    .dialog-panel {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      background: linear-gradient(135deg, rgba(1, 15, 8, 0.95), rgba(1, 8, 15, 0.95));
+      border: 1px solid var(--neon-green);
+      border-radius: 12px;
+      box-shadow: 0 0 50px rgba(0, 255, 159, 0.2), inset 0 0 30px rgba(0, 255, 159, 0.05);
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      animation: dialogZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (min-width: 768px) {
+      .dialog-panel {
+        grid-template-columns: 1.1fr 1.3fr;
+      }
+    }
+
+    @keyframes dialogZoomIn {
+      from {
+        opacity: 0;
+        transform: scale(0.94) translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    /* Aesthetic Corners */
+    .corner-decor {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+    }
+    .decor-tl { top: -1px; left: -1px; border-top: 3px solid var(--neon-yellow); border-left: 3px solid var(--neon-yellow); }
+    .decor-tr { top: -1px; right: -1px; border-top: 3px solid var(--neon-cyan); border-right: 3px solid var(--neon-cyan); }
+    .decor-bl { bottom: -1px; left: -1px; border-bottom: 3px solid var(--neon-cyan); border-left: 3px solid var(--neon-cyan); }
+    .decor-br { bottom: -1px; right: -1px; border-bottom: 3px solid var(--neon-yellow); border-right: 3px solid var(--neon-yellow); }
+
+    .btn-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      color: #94a3b8;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .btn-close:hover {
+      background: var(--neon-red);
+      color: #ffffff;
+      border-color: var(--neon-red);
+      box-shadow: 0 0 15px var(--neon-red);
+    }
+
+    /* --- INFO SIDEBAR IN MODAL --- */
+    .chapter-info-column {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      padding-right: 24px;
+    }
+
+    @media (max-width: 767px) {
+      .chapter-info-column {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 24px;
+      }
+    }
+
+    .chapter-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: rgba(0, 255, 159, 0.12);
+      color: var(--neon-green);
+      border: 1px solid rgba(0, 255, 159, 0.25);
+      padding: 4px 10px;
+      border-radius: 4px;
+      align-self: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .chapter-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #ffffff;
+      line-height: 1.25;
+      margin-bottom: 16px;
+      text-shadow: 0 0 8px rgba(255,255,255,0.2);
+    }
+
+    .chapter-overview {
+      font-size: 13px;
+      line-height: 1.7;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+
+    .chapter-context-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: auto;
+    }
+
+    .chapter-context-title {
+      font-size: 9px;
+      color: var(--neon-yellow);
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .chapter-context-desc {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #64748b;
+    }
+
+    /* --- LIVE SIMULATOR COLUMN --- */
+    .chapter-sim-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sim-selector-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sim-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--neon-cyan);
+      font-weight: bold;
+    }
+
+    .sim-select {
+      width: 100%;
+      background: #0d1510;
+      border: 1px solid rgba(0, 255, 159, 0.2);
+      border-radius: 6px;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 8px 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .sim-select:focus {
+      border-color: var(--neon-green);
+    }
+
+    .sim-viewport {
+      flex-grow: 1;
+      background: #020804;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* --- SIMULATORS COMPONENT SPECIFIC STYLING --- */
+    .slider-group {
+      margin-bottom: 12px;
+    }
+
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      margin-bottom: 4px;
+    }
+
+    .slider-row span:last-child {
+      color: var(--neon-cyan);
+      font-weight: bold;
+    }
+
+    .sim-range {
+      width: 100%;
+      accent-color: var(--neon-green);
+      height: 4px;
+      outline: none;
+      background: #111827;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Interactive Grids / Matrixes */
+    .grid-matrix-4x4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-width: 140px;
+      margin: 12px 0;
+    }
+
+    .grid-cell {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      background: #0d1510;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.15);
+      transition: all 0.2s;
+    }
+
+    .grid-cell.active {
+      background: var(--neon-yellow);
+      border-color: var(--neon-yellow);
+      color: #000000;
+      box-shadow: 0 0 10px var(--neon-yellow);
+    }
+
+    /* Bits Row */
+    .bits-row {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+      margin: 12px 0;
+    }
+
+    .bit-btn {
+      background: #0a0f0d;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      padding: 6px 0;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .bit-btn.active {
+      background: rgba(0, 212, 255, 0.15);
+      border-color: var(--neon-cyan);
+      color: var(--neon-cyan);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+    }
+
+    .bit-name {
+      font-size: 7px;
+      color: #64748b;
+      display: block;
+    }
+
+    .bit-val {
+      font-size: 11px;
+      font-weight: 900;
+      display: block;
+    }
+
+    /* Metric readouts */
+    .metric-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 12px;
+      margin-top: 8px;
+    }
+
+    .metric-item {
+      text-align: center;
+    }
+
+    .metric-title {
+      font-size: 8px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .metric-value {
+      font-size: 14px;
+      font-weight: bold;
+      color: #ffffff;
+      margin-top: 2px;
+    }
+
+    /* Button styles */
+    .action-button {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-button:hover {
+      background: var(--neon-green);
+      color: #000000;
+      box-shadow: 0 0 15px var(--neon-green);
+    }
+  </style>
+
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- Background and 3D Canvas Stack -->
+  <div id="canvas-container">
+    <canvas id="pcb-canvas"></canvas>
+    <canvas id="three-canvas"></canvas>
+  </div>
+
+  <!-- Ambient CRT scanlines overlay -->
+  <div class="scanlines"></div>
+
+  <!-- HUD Header Overlay -->
+  <header class="hud-header">
+    <div class="brand-group">
+      <h1 class="brand-title">Neural Data Spine</h1>
+      <p class="brand-subtitle">▸ Advanced Silicon Co-Design Studio ◂</p>
+    </div>
+    <div class="header-diagnostics">
+      <div class="diag-line">SYSTEM TIME: <span id="hud-time">--:--:--</span></div>
+      <div class="diag-line">ACTIVE INTEGRATIONS: <span>8 / 8 CORES</span></div>
+    </div>
+  </header>
+
+  <!-- Instructions panel -->
+  <section class="hud-instructions">
+    <h3 class="instructions-title">Control Guide</h3>
+    <div class="instructions-body">
+      ▸ <span>DRAG</span> space canvas to rotate the 3D double-helix.<br /><br />
+      ▸ <span>SCROLL</span> mouse wheel to zoom camera.<br /><br />
+      ▸ <span>CLICK</span> glowing node cards to expand chapters & run the real-time simulations.
+    </div>
+  </section>
+
+  <!-- HUD Footer Overlay -->
+  <footer class="hud-footer">
+    <div class="footer-ticker">▸ CORE CHANNEL RATE: 100 Gbps // INTERACTIVE GRAPH INTERFACE v2.4 // HETAAL VANKAWALA</div>
+    <div class="footer-hint">DRAG MOUSE OR USE WHEEL TO INTERACT WITH SPINE</div>
+  </footer>
+
+  <!-- Overlay Modal Dialog for Active Chapter & Simulators -->
+  <div class="overlay-container" id="chapter-overlay">
+    <div class="dialog-panel">
+      <!-- Aesthetic corner widgets -->
+      <div class="corner-decor decor-tl"></div>
+      <div class="corner-decor decor-tr"></div>
+      <div class="corner-decor decor-bl"></div>
+      <div class="corner-decor decor-br"></div>
+      
+      <!-- Close button -->
+      <button class="btn-close" id="btn-modal-close" aria-label="Close dialog">✕</button>
+
+      <!-- Chapter Metadata left-side column -->
+      <div class="chapter-info-column">
+        <div>
+          <span class="chapter-badge" id="modal-chapter-badge">Chapter --</span>
+          <h2 class="chapter-title" id="modal-chapter-title">Title</h2>
+          <p class="chapter-overview" id="modal-chapter-overview">Overview text goes here...</p>
+        </div>
+        <div class="chapter-context-box">
+          <h4 class="chapter-context-title">Engineering / Practical Context</h4>
+          <p class="chapter-context-desc" id="modal-chapter-context">Context notes go here...</p>
+        </div>
+      </div>
+
+      <!-- Co-design Simulation module right-side column -->
+      <div class="chapter-sim-column">
+        <div class="sim-selector-container">
+          <span class="sim-label">Tactile Hardware Simulation Block</span>
+          <select class="sim-select" id="simulation-selector">
+            <option value="matching">Microstrip Transmission Line Coupling</option>
+            <option value="thermal">Junction Heat Dissipation Vias</option>
+            <option value="transient">SPICE Gate Overshoot Waveform</option>
+            <option value="ac">AC Insertion Spectrum S21/S11</option>
+            <option value="register">GPIO APB Memory Register Stack</option>
+            <option value="rtos">RTOS Preemptive Task Scheduler</option>
+            <option value="rtl">CDC Gray-code Pipeline Synchronizer</option>
+            <option value="sta">STA Corner Path Delay Slack Solver</option>
+          </select>
+        </div>
+
+        <!-- Render active simulation container -->
+        <div class="sim-viewport">
+          <!-- Dynamic contents are drawn here dynamically via renderSimulation() -->
+          <div id="sim-content-area" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+            <!-- Render Target -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- core data -->
+  <script>
+    const CHAPTER_DATA = [
+      {
+        id: "ch1_impedance",
+        stage: "Stage 01",
+        badge: "Ch. 01 // Transmission Matching",
+        title: "Microstrip Characteristic Coupling",
+        overview: "Explores the fundamental electromagnetic calculations governing high-speed PCB differential trace runs. Signal integrity drops drastically if differential trace width or gap height is misconfigured relative to the substrate dielectric.",
+        context: "High-speed differential protocols (PCIe Gen 5, DDR5 memory, USB4) require exact trace geometry sizing. This simulator computes Zo (impedance) and coupling levels dynamically.",
+        defaultSim: "matching"
+      },
+      {
+        id: "ch2_thermal",
+        stage: "Stage 01",
+        badge: "Ch. 02 // Thermal Dissipation",
+        title: "Thermal Via Matrix Solver",
+        overview: "Allows you to stitch copper thermal vias in a 4x4 coordinate space under extreme load semiconductors. Vias route excessive heat from the die into internal ground plates to lower junction temperature.",
+        context: "Wide-bandgap power systems like Silicon Carbide (SiC) and Gallium Nitride (GaN) field transistors handle kilowatts of energy and require dense thermal stitch patterns.",
+        defaultSim: "thermal"
+      },
+      {
+        id: "ch3_gate_loop",
+        stage: "Stage 02",
+        badge: "Ch. 03 // Parasitic Loops",
+        title: "Gate Resistor Ringing Scope",
+        overview: "Simulates transient gate voltages during fast power switching. Gate loop parasitic inductance combines with gate-to-source capacitance, sparking severe voltage spikes unless dampened by a gate resistor.",
+        context: "Excessive high-frequency ringing can damage transistor gates or cause false trigger spikes, producing severe EMI problems in power stages.",
+        defaultSim: "transient"
+      },
+      {
+        id: "ch4_insertion",
+        stage: "Stage 02",
+        badge: "Ch. 04 // Signal Loss",
+        title: "Insertion Loss Frequency Sweeper",
+        overview: "Draws multi-gigahertz S-parameters over long transmission paths. Dielectric loss tangent factor and skin effects attenuate ultra-high frequency channels, causing severe data packet distortion.",
+        context: "Backplane loss metrics (S21) determine the maximum trace run size permitted before requiring retimers to re-generate the signal pattern.",
+        defaultSim: "ac"
+      },
+      {
+        id: "ch5_register",
+        stage: "Stage 03",
+        badge: "Ch. 05 // Microcontrollers",
+        title: "GPIO Output Register Stack",
+        overview: "Flipping specific bits in peripheral configuration addresses controls actual output pin voltage. This simulator maps standard hexadecimal CPU addresses straight to physical, real-time micro LED outputs.",
+        context: "Bare-metal drivers read and write atomic structures on high-performance microcontrollers to toggle physical communication pins with single-cycle precision.",
+        defaultSim: "register"
+      },
+      {
+        id: "ch6_rtos",
+        stage: "Stage 03",
+        badge: "Ch. 06 // Task Scheduling",
+        title: "RTOS Preemptive Lane Timeline",
+        overview: "Simulates multi-threaded scheduler pipelines under varying prioritization rules. Watchdog threads preempt application lanes to ensure steady runtime limits.",
+        context: "A real-time operating system ensures vital tasks (like safety checking) complete on time, keeping lower-priority tasks active only during idle gaps.",
+        defaultSim: "rtos"
+      },
+      {
+        id: "ch7_cdc",
+        stage: "Stage 04",
+        badge: "Ch. 07 // Clock Domains",
+        title: "Clock Domain Crossing Pipeline",
+        overview: "Asynchronous clock domains require careful data synchronization to prevent metastable state capture. Passing clock vectors through Gray code stages avoids critical clock mismatch errors.",
+        context: "Modern System-on-Chips have dozens of clock domains. Correct CDC design blocks data errors at domain cross-points.",
+        defaultSim: "rtl"
+      },
+      {
+        id: "ch8_sta",
+        stage: "Stage 04",
+        badge: "Ch. 08 // Timing Analysis",
+        title: "STA Timing Setup / Hold Slack",
+        overview: "Computes cell propagation delays over varying environmental conditions (PVT corner analysis). Fast paths risk hold failures, while slow paths reduce setup margins.",
+        context: "Static Timing Analysis guarantees that digital signals settle cleanly before the next clock pulse, verifying chip stability across extreme conditions.",
+        defaultSim: "sta"
+      }
+    ];
+
+    // --- HUD Time Updater ---
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('hud-time').textContent = now.toLocaleTimeString();
+    }, 1000);
+  </script>
+
+  <!-- Canvas 2D Animated PCB Background -->
+  <script>
+    (function initPCB() {
+      const canvas = document.getElementById('pcb-canvas');
+      const ctx = canvas.getContext('2d');
+      const COLS = ['#00ff9f', '#ffd700', '#00d4ff'];
+
+      function render() {
+        const W = (canvas.width = window.innerWidth);
+        const H = (canvas.height = window.innerHeight);
+
+        ctx.fillStyle = '#010502';
+        ctx.fillRect(0, 0, W, H);
+
+        const GRID = 56;
+        ctx.globalAlpha = 0.06;
+        for (let x = 0; x < W + GRID; x += GRID) {
+          for (let y = 0; y < H + GRID; y += GRID) {
+            ctx.beginPath();
+            ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+            ctx.fillStyle = COLS[(x + y) % 3];
+            ctx.fill();
+          }
+        }
+
+        // Draw animated traces
+        ctx.globalAlpha = 0.14;
+        ctx.lineWidth = 1;
+        const traces = [0.15, 0.32, 0.48, 0.64, 0.82, 0.94];
+        traces.forEach((frac, i) => {
+          ctx.strokeStyle = COLS[i % 3];
+          let y = frac * H;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          let x = 0;
+          while (x < W) {
+            const step = 60 + Math.random() * 120;
+            x += step;
+            ctx.lineTo(x, y);
+            if (Math.random() > 0.5 && x < W - 60) {
+              const dir = Math.random() > 0.5 ? 1 : -1;
+              const jump = GRID;
+              ctx.lineTo(x, y + dir * jump);
+              y += dir * jump;
+            }
+          }
+          ctx.stroke();
+        });
+
+        // Pulsing vias
+        ctx.globalAlpha = 0.25;
+        for (let j = 0; j < 30; j++) {
+          const vx = ((j * 113) % 100) * 0.01 * W;
+          const vy = ((j * 147) % 100) * 0.01 * H;
+          const col = COLS[j % 3];
+          ctx.strokeStyle = col;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      render();
+      window.addEventListener('resize', render);
+    })();
+  </script>
+
+  <!-- Interactive 3D Double-Helix Spine via Three.js -->
+  <script>
+    (function initThree() {
+      const canvas = document.getElementById('three-canvas');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 0, 16);
+
+      const pivot = new THREE.Group();
+      scene.add(pivot);
+
+      // Lights
+      const ambLight = new THREE.AmbientLight(0xffffff, 0.25);
+      scene.add(ambLight);
+
+      const pLight1 = new THREE.PointLight(0x00ff9f, 3, 30);
+      pLight1.position.set(6, 6, 6);
+      scene.add(pLight1);
+
+      const pLight2 = new THREE.PointLight(0x00d4ff, 2.5, 30);
+      pLight2.position.set(-6, -6, 6);
+      scene.add(pLight2);
+
+      // Spine Helix Curve Parameters
+      const TURNS = 3.2;
+      const RADIUS = 2.4;
+      const HEIGHT = 18;
+      const N_PTS = 200;
+
+      function getHelixPoints(turns, radius, heightRange, phaseOffset) {
+        const pts = [];
+        for (let i = 0; i < N_PTS; i++) {
+          const t = (i / (N_PTS - 1)) * Math.PI * 2 * turns - Math.PI * turns;
+          pts.push(new THREE.Vector3(
+            Math.cos(t + phaseOffset) * radius,
+            t * (heightRange / (Math.PI * 2 * turns)),
+            Math.sin(t + phaseOffset) * radius
+          ));
+        }
+        return pts;
+      }
+
+      const ptsA = getHelixPoints(TURNS, RADIUS, HEIGHT, 0);
+      const tubeCurveA = new THREE.CatmullRomCurve3(ptsA);
+      const tubeGeoA = new THREE.TubeGeometry(tubeCurveA, 150, 0.04, 8, false);
+      const tubeMatA = new THREE.MeshBasicMaterial({ color: 0x00ff9f });
+      const helixA = new THREE.Mesh(tubeGeoA, tubeMatA);
+      pivot.add(helixA);
+
+      const ptsB = getHelixPoints(TURNS, RADIUS, HEIGHT, Math.PI);
+      const tubeCurveB = new THREE.CatmullRomCurve3(ptsB);
+      const tubeGeoB = new THREE.TubeGeometry(tubeCurveB, 150, 0.03, 8, false);
+      const tubeMatB = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+      const helixB = new THREE.Mesh(tubeGeoB, tubeMatB);
+      pivot.add(helixB);
+
+      // Double-helix connect lines (rungs)
+      const rungMat = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.5 });
+      const rungInterval = Math.floor(N_PTS / 24);
+      for (let i = 0; i < N_PTS; i += rungInterval) {
+        const geo = new THREE.BufferGeometry().setFromPoints([ptsA[i], ptsB[i]]);
+        const rung = new THREE.Line(geo, rungMat);
+        pivot.add(rung);
+      }
+
+      // Floating Chapter Cards
+      const CARD_COLORS = [0x00ff9f, 0xffd700, 0x00d4ff, 0xa855f7];
+      const cardGroups = [];
+      const cardPlanes = [];
+
+      CHAPTER_DATA.forEach((chapter, i) => {
+        const frac = (i + 0.5) / CHAPTER_DATA.length;
+        const t = frac * Math.PI * 2 * TURNS - Math.PI * TURNS;
+        const yPos = t * (HEIGHT / (Math.PI * 2 * TURNS));
+
+        const side = i % 2 === 0 ? 1 : -1;
+        const angle = t + side * 0.45;
+        const R = RADIUS + 2.8;
+        const cx = Math.cos(angle) * R;
+        const cz = Math.sin(angle) * R;
+
+        const col = CARD_COLORS[i % CARD_COLORS.length];
+
+        const group = new THREE.Group();
+
+        // Face
+        const faceGeo = new THREE.PlaneGeometry(2.3, 1.25);
+        const faceMat = new THREE.MeshBasicMaterial({
+          color: 0x010804,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide
+        });
+        const face = new THREE.Mesh(faceGeo, faceMat);
+        group.add(face);
+
+        // Border outline
+        const edgesGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(2.3, 1.25));
+        const edgesMat = new THREE.LineBasicMaterial({ color: col });
+        const border = new THREE.LineSegments(edgesGeo, edgesMat);
+        group.add(border);
+
+        group.position.set(cx, yPos, cz);
+        group.lookAt(new THREE.Vector3(0, yPos, 0));
+
+        group.userData = {
+          index: i,
+          chapterId: chapter.id,
+          basePos: new THREE.Vector3(cx, yPos, cz)
+        };
+
+        cardGroups.push(group);
+        cardPlanes.push(face);
+        pivot.add(group);
+
+        // Connection helper line from core to card
+        const spinePos = ptsA[Math.round(frac * (N_PTS - 1))];
+        const linkGeo = new THREE.BufferGeometry().setFromPoints([spinePos, new THREE.Vector3(cx, yPos, cz)]);
+        const link = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.3 }));
+        pivot.add(link);
+      });
+
+      // Ambient Space Dust Stars
+      const particleCount = 300;
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount * 3; i += 3) {
+        particlePositions[i] = (Math.random() - 0.5) * 35;
+        particlePositions[i+1] = (Math.random() - 0.5) * 22;
+        particlePositions[i+2] = (Math.random() - 0.5) * 16;
+      }
+      const particleGeo = new THREE.BufferGeometry();
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+      const spaceDust = new THREE.Points(particleGeo, new THREE.PointsMaterial({ color: 0x00ff9f, size: 0.05, transparent: true, opacity: 0.4 }));
+      pivot.add(spaceDust);
+
+      // Drag Orbit Control parameters
+      let isDragging = false;
+      let prevX = 0, prevY = 0;
+      let targetRotX = 0, targetRotY = 0;
+      let currentRotX = 0, currentRotY = 0;
+
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        prevX = e.clientX;
+        prevY = e.clientY;
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        targetRotY += (e.clientX - prevX) * 0.007;
+        targetRotX += (e.clientY - prevY) * 0.007;
+        prevX = e.clientX;
+        prevY = e.clientY;
+      });
+
+      canvas.addEventListener('wheel', (e) => {
+        camera.position.z = Math.max(8, Math.min(22, camera.position.z + e.deltaY * 0.015));
+      }, { passive: true });
+
+      // Click detection using standard Raycasting
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let moveDeltaCheck = false;
+
+      canvas.addEventListener('mousedown', () => moveDeltaCheck = false);
+      canvas.addEventListener('mousemove', () => moveDeltaCheck = true);
+
+      canvas.addEventListener('click', (e) => {
+        if (moveDeltaCheck && isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(cardPlanes);
+
+        if (hits.length > 0) {
+          const planeObj = hits[0].object;
+          const parentGroup = planeObj.parent;
+          if (parentGroup && parentGroup.userData) {
+            const idx = parentGroup.userData.index;
+            window.openChapter(idx);
+          }
+        }
+      });
+
+      // Hover Pointer Cursor
+      canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(cardPlanes);
+        canvas.style.cursor = hits.length > 0 ? 'pointer' : 'grab';
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Frame tick loop
+      let runTime = 0;
+      function animate() {
+        requestAnimationFrame(animate);
+        runTime += 0.008;
+
+        if (!isDragging) {
+          targetRotY += 0.0025; // slow idle spin
+        }
+        currentRotX += (targetRotX - currentRotX) * 0.06;
+        currentRotY += (targetRotY - currentRotY) * 0.06;
+
+        pivot.rotation.x = currentRotX;
+        pivot.rotation.y = currentRotY;
+
+        // clamp
+        targetRotX = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRotX));
+
+        // Pulsate floating card animations
+        cardGroups.forEach((g, i) => {
+          const base = g.userData.basePos;
+          const shift = Math.sin(runTime * 1.6 + i * 0.5) * 0.06;
+          const scaling = 1 + Math.sin(runTime * 2.0 + i * 0.4) * 0.03;
+          g.position.x = base.x + Math.sin(runTime * 0.5 + i) * 0.03;
+          g.position.y = base.y + shift;
+          g.position.z = base.z + Math.cos(runTime * 0.5 + i) * 0.03;
+          g.scale.setScalar(scaling);
+        });
+
+        renderer.render(scene, camera);
+      }
+
+      animate();
+    })();
+  </script>
+
+  <!-- Simulation Engines, Controls & Rendering -->
+  <script>
+    // --- GLOBAL STATE CONTROLS ---
+    const simState = {
+      // microstrip
+      traceWidth: 6,
+      traceSpacing: 8,
+      dielectricHeight: 8,
+      dielectricConstant: 4.2,
+
+      // thermal
+      vias: new Array(16).fill(false),
+
+      // transient
+      inductance: 12,
+      gateResistor: 4.7,
+
+      // S-parameters loss
+      channelLength: 8,
+      lossTangent: 0.004,
+
+      // register bits
+      registerBits: [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+
+      // rtos scheduler
+      priorityA: 1,
+      priorityB: 2,
+      rtosTicks: 0,
+      rtosHistory: [],
+      rtosTimer: null,
+
+      // cdc
+      cdcStep: 0, // 0: idle, 1: bin, 2: gray, 3: synchronizing, 4: synchronized, 5: output
+      cdcValue: "0xAF",
+
+      // sta slack analysis
+      siliconProcess: "typical",
+      coreVoltage: 1.0,
+      operatingTemp: 25
+    };
+
+    let activeSimId = "matching";
+
+    // Open Chapter Overlay Panel
+    window.openChapter = function(index) {
+      const data = CHAPTER_DATA[index];
+      document.getElementById('modal-chapter-badge').textContent = data.badge;
+      document.getElementById('modal-chapter-title').textContent = data.title;
+      document.getElementById('modal-chapter-overview').textContent = data.overview;
+      document.getElementById('modal-chapter-context').textContent = data.context;
+
+      // Match select value
+      const selector = document.getElementById('simulation-selector');
+      selector.value = data.defaultSim;
+      activeSimId = data.defaultSim;
+
+      // show overlay
+      document.getElementById('chapter-overlay').classList.add('active');
+
+      // Boot Simulation Panel
+      renderSimulation();
+    };
+
+    // Close Overlay Panel
+    document.getElementById('btn-modal-close').addEventListener('click', () => {
+      document.getElementById('chapter-overlay').classList.remove('active');
+      if (simState.rtosTimer) {
+        clearInterval(simState.rtosTimer);
+        simState.rtosTimer = null;
+      }
+    });
+
+    // Handle Selector Changes
+    document.getElementById('simulation-selector').addEventListener('change', (e) => {
+      activeSimId = e.target.value;
+      renderSimulation();
+    });
+
+    // --- RENDER ROUTING ENGINE ---
+    function renderSimulation() {
+      const area = document.getElementById('sim-content-area');
+      area.innerHTML = ""; // reset
+
+      // Cancel any running interval before booting new simulations
+      if (simState.rtosTimer) {
+        clearInterval(simState.rtosTimer);
+        simState.rtosTimer = null;
+      }
+
+      switch (activeSimId) {
+        case "matching":
+          renderMatchingSim(area);
+          break;
+        case "thermal":
+          renderThermalSim(area);
+          break;
+        case "transient":
+          renderTransientSim(area);
+          break;
+        case "ac":
+          renderAcLossSim(area);
+          break;
+        case "register":
+          renderRegisterSim(area);
+          break;
+        case "rtos":
+          renderRtosSim(area);
+          break;
+        case "rtl":
+          renderRtlSim(area);
+          break;
+        case "sta":
+          renderStaSim(area);
+          break;
+      }
+    }
+
+    // ----------------------------------------------------
+    // 1. MATCHING SIMULATOR ENGINE
+    // ----------------------------------------------------
+    function renderMatchingSim(container) {
+      const compute = () => {
+        const Er = simState.dielectricConstant;
+        const H = simState.dielectricHeight;
+        const W = simState.traceWidth;
+        const S = simState.traceSpacing;
+        const T = 1.37; // Copper foil thickness
+
+        const zo = (87.0 / Math.sqrt(Er + 1.41)) * Math.log((5.98 * H) / (0.8 * W + T));
+        const coupling = 1.0 - 0.48 * Math.exp(-0.96 * (S / H));
+        const zdiff = 2.0 * zo * coupling;
+
+        return {
+          zo: Math.round(zo * 10) / 10,
+          zdiff: Math.round(zdiff * 10) / 10
+        };
+      };
+
+      const metrics = compute();
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 8px;">CALCULATE TRANSMISSION WAVE PATTERNS</p>
+          
+          <div class="slider-group">
+            <div class="slider-row"><span>Trace Width (W)</span><span id="val-w">${simState.traceWidth} mils</span></div>
+            <input type="range" class="sim-range" min="3" max="15" step="0.5" id="slider-w" value="${simState.traceWidth}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Trace Spacing (S)</span><span id="val-s">${simState.traceSpacing} mils</span></div>
+            <input type="range" class="sim-range" min="4" max="24" step="0.5" id="slider-s" value="${simState.traceSpacing}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Dielectric Layer Thickness (H)</span><span id="val-h">${simState.dielectricHeight} mils</span></div>
+            <input type="range" class="sim-range" min="4" max="16" step="0.5" id="slider-h" value="${simState.dielectricHeight}" />
+          </div>
+
+          <div style="margin-top: 12px;">
+            <div class="slider-row"><span>Substrate Core Dielectric</span></div>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+              <button class="action-button" id="btn-dk-fr4" style="padding: 6px; font-size: 9px; ${simState.dielectricConstant === 4.2 ? 'background:var(--neon-green); color:#000;' : ''}">FR-4 (Dk=4.2)</button>
+              <button class="action-button" id="btn-dk-rogers" style="padding: 6px; font-size: 9px; ${simState.dielectricConstant === 3.66 ? 'background:var(--neon-green); color:#000;' : ''}">Rogers (Dk=3.66)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-item">
+            <div class="metric-title">Characteristic Zo</div>
+            <div class="metric-value" id="val-zo" style="color:var(--neon-green); font-size:18px;">${metrics.zo} Ω</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-title">Differential Zdiff</div>
+            <div class="metric-value" id="val-zdiff" style="color:var(--neon-cyan); font-size:18px;">${metrics.zdiff} Ω</div>
+          </div>
+        </div>
+      `;
+
+      // Event hookups
+      const inputW = document.getElementById('slider-w');
+      const inputS = document.getElementById('slider-s');
+      const inputH = document.getElementById('slider-h');
+
+      const refresh = () => {
+        simState.traceWidth = parseFloat(inputW.value);
+        simState.traceSpacing = parseFloat(inputS.value);
+        simState.dielectricHeight = parseFloat(inputH.value);
+
+        document.getElementById('val-w').textContent = `${simState.traceWidth} mils`;
+        document.getElementById('val-s').textContent = `${simState.traceSpacing} mils`;
+        document.getElementById('val-h').textContent = `${simState.dielectricHeight} mils`;
+
+        const m = compute();
+        document.getElementById('val-zo').textContent = `${m.zo} Ω`;
+        document.getElementById('val-zdiff').textContent = `${m.zdiff} Ω`;
+      };
+
+      inputW.addEventListener('input', refresh);
+      inputS.addEventListener('input', refresh);
+      inputH.addEventListener('input', refresh);
+
+      document.getElementById('btn-dk-fr4').addEventListener('click', () => {
+        simState.dielectricConstant = 4.2;
+        renderMatchingSim(container);
+      });
+      document.getElementById('btn-dk-rogers').addEventListener('click', () => {
+        simState.dielectricConstant = 3.66;
+        renderMatchingSim(container);
+      });
+    }
+
+    // ----------------------------------------------------
+    // 2. THERMAL SIMULATOR ENGINE
+    // ----------------------------------------------------
+    function renderThermalSim(container) {
+      const compute = () => {
+        const activeVias = simState.vias.filter(v => v).length;
+        const rth_base = 18.5; // °C/W
+        const rth_via_eff = 15.0 / (1.0 + activeVias * 0.45);
+        const rth_total = 2.5 + (1.0 / ((1.0 / rth_base) + (1.0 / rth_via_eff)));
+        const heatLoss = 75; // Watts
+        const temp = 40 + (heatLoss * rth_total);
+
+        return {
+          activeVias,
+          rth: Math.round(rth_total * 10) / 10,
+          temp: Math.round(temp * 10) / 10
+        };
+      };
+
+      const metrics = compute();
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 4px;">TAP TO STITCH COPPER HEAT VIAS</p>
+          <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">Conduct power-die dissipation safely down to the thermal plane.</p>
+          
+          <div class="grid-matrix-4x4" id="vias-matrix">
+            ${simState.vias.map((state, idx) => `
+              <div class="grid-cell ${state ? 'active' : ''}" data-idx="${idx}">●</div>
+            `).join('')}
+          </div>
+          <span style="font-size: 9px; color: var(--neon-yellow);">Vias Stitched: ${metrics.activeVias} / 16 Channels</span>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-item">
+            <div class="metric-title">Junction Rth</div>
+            <div class="metric-value" style="color:var(--neon-cyan);">${metrics.rth} °C/W</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-title">Silicon Die Temp</div>
+            <div class="metric-value" id="thermal-die-temp" style="color:${metrics.temp > 105 ? 'var(--neon-red)' : 'var(--neon-green)'};">${metrics.temp} °C</div>
+          </div>
+        </div>
+      `;
+
+      // Click toggles
+      document.querySelectorAll('#vias-matrix .grid-cell').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.getAttribute('data-idx'));
+          simState.vias[idx] = !simState.vias[idx];
+          renderThermalSim(container);
+        });
+      });
+    }
+
+    // ----------------------------------------------------
+    // 3. TRANSIENT SIMULATOR ENGINE
+    // ----------------------------------------------------
+    function renderTransientSim(container) {
+      const drawChart = () => {
+        const points = [];
+        const steps = 100;
+        const L = simState.inductance * 1e-9;
+        const R = simState.gateResistor + 2.0;
+        const C = 1.2e-9; // Parasitic charge
+
+        const alpha = R / (2.0 * L);
+        const omega_0 = 1.0 / Math.sqrt(L * C);
+        const isOverdamped = alpha >= omega_0;
+
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          let y = 0;
+          if (t >= 0.1) {
+            const dt = (t - 0.1) * 60;
+            if (isOverdamped) {
+              const r1 = -alpha + Math.sqrt(alpha*alpha - omega_0*omega_0);
+              const r2 = -alpha - Math.sqrt(alpha*alpha - omega_0*omega_0);
+              y = 1.0 - (Math.exp(r1 * dt * 0.05) + Math.exp(r2 * dt * 0.05)) * 0.5;
+            } else {
+              const wd = Math.sqrt(omega_0*omega_0 - alpha*alpha);
+              y = 1.0 - Math.exp(-alpha * dt * 0.04) * Math.cos(wd * dt * 0.04);
+            }
+          }
+          points.push({ x: (i / steps) * 260, y: 110 - (y * 70) });
+        }
+
+        const path = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+        // Check overshoot spike
+        const highestSpikeY = Math.min(...points.map(p => p.y));
+        const vgsPercent = (110 - highestSpikeY) / 70;
+        const peakV = Math.round(vgsPercent * 18 * 10) / 10;
+
+        return { path, peakV };
+      };
+
+      const result = drawChart();
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 8px;">PARASITIC TRANSIENT CAPACITANCE</p>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Gate Loop Inductance (Lstray)</span><span>${simState.inductance} nH</span></div>
+            <input type="range" class="sim-range" min="2" max="35" step="0.5" id="slider-l" value="${simState.inductance}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Gate Damping Resistor (Rg)</span><span>${simState.gateResistor} Ω</span></div>
+            <input type="range" class="sim-range" min="1" max="25" step="0.5" id="slider-rg" value="${simState.gateResistor}" />
+          </div>
+        </div>
+
+        <div style="height: 120px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; background: #000; position: relative;">
+          <!-- SVG Scope -->
+          <svg width="100%" height="100%" viewBox="0 0 260 120">
+            <path d="${result.path}" fill="none" stroke="#00ff9f" stroke-width="2" />
+          </svg>
+          <span style="position: absolute; right: 8px; top: 8px; font-size: 8px; color: ${result.peakV > 21 ? 'var(--neon-red)' : 'var(--neon-cyan)'}; font-weight: bold;">
+            ${result.peakV > 21 ? '⚡ OVERSHOOT SPIKE' : 'STABLE Vgs'}
+          </span>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-item">
+            <div class="metric-title">Peak Overshoot Vgs</div>
+            <div class="metric-value" style="color:var(--neon-cyan);">${result.peakV} V</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-title">Transient Check</div>
+            <div class="metric-value" style="color: ${result.peakV > 21 ? 'var(--neon-red)' : 'var(--neon-green)'};">
+              ${result.peakV > 21 ? 'HIGH NOISE' : 'PASS'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Hookups
+      const inputL = document.getElementById('slider-l');
+      const inputRg = document.getElementById('slider-rg');
+
+      const refresh = () => {
+        simState.inductance = parseFloat(inputL.value);
+        simState.gateResistor = parseFloat(inputRg.value);
+        renderTransientSim(container);
+      };
+
+      inputL.addEventListener('input', refresh);
+      inputRg.addEventListener('input', refresh);
+    }
+
+    // ----------------------------------------------------
+    // 4. AC LOSS SPECTRUM SIMULATOR
+    // ----------------------------------------------------
+    function renderAcLossSim(container) {
+      const drawSParams = () => {
+        const s21Pts = [];
+        const s11Pts = [];
+        const steps = 80;
+
+        for (let i = 0; i <= steps; i++) {
+          const f = 0.1 + (i / steps) * 15; // frequency range up to 15GHz
+          const dielectricLoss = f * Math.sqrt(3.8) * simState.lossTangent;
+          const skinEffectLoss = 0.012 * Math.sqrt(f * 1e9) * 1e-4;
+          const attenuation = dielectricLoss + skinEffectLoss;
+          const s21 = -attenuation * simState.channelLength;
+
+          const resonance = -35.0 + 8.0 * Math.sin(f * 1.5);
+          const s11 = Math.min(-9.0, resonance + (f * 0.4));
+
+          const yS21 = 20 + (Math.abs(s21) / 32.0) * 85;
+          const yS11 = 20 + ((Math.abs(s11) - 5) / 35.0) * 85;
+
+          s21Pts.push({ x: (i / steps) * 260, y: Math.min(115, Math.max(10, yS21)) });
+          s11Pts.push({ x: (i / steps) * 260, y: Math.min(115, Math.max(10, yS11)) });
+        }
+
+        const pathS21 = s21Pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+        const pathS11 = s11Pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+        return { pathS21, pathS11 };
+      };
+
+      const result = drawSParams();
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 8px;">AC LOSS INSERTION COEFFICIENTS</p>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Trace Physical Length</span><span>${simState.channelLength} inches</span></div>
+            <input type="range" class="sim-range" min="1" max="20" step="1" id="slider-len" value="${simState.channelLength}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Loss Tangent (Tan δ)</span><span>${simState.lossTangent}</span></div>
+            <input type="range" class="sim-range" min="0.001" max="0.02" step="0.001" id="slider-loss" value="${simState.lossTangent}" />
+          </div>
+        </div>
+
+        <div style="height: 110px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; background: #000; position: relative;">
+          <svg width="100%" height="100%" viewBox="0 0 260 120">
+            <path d="${result.pathS21}" fill="none" stroke="#00d4ff" stroke-width="2" />
+            <path d="${result.pathS11}" fill="none" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3" />
+          </svg>
+          <span style="position: absolute; left: 8px; bottom: 8px; font-size: 7px; color: #00d4ff;">● S21 (INSERTION)</span>
+          <span style="position: absolute; right: 8px; bottom: 8px; font-size: 7px; color: #ffd700;">● S11 (RETURN)</span>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-item">
+            <div class="metric-title">Loss at 4 GHz</div>
+            <div class="metric-value" style="color:var(--neon-green);">${Math.round(-simState.lossTangent * 4 * Math.sqrt(3.8) * simState.channelLength * 10) / 10} dB</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-title">F sweep</div>
+            <div class="metric-value" style="color:var(--neon-cyan);">15 GHz</div>
+          </div>
+        </div>
+      `;
+
+      // Hooks
+      const inputLen = document.getElementById('slider-len');
+      const inputLoss = document.getElementById('slider-loss');
+
+      const refresh = () => {
+        simState.channelLength = parseInt(inputLen.value);
+        simState.lossTangent = parseFloat(inputLoss.value);
+        renderAcLossSim(container);
+      };
+
+      inputLen.addEventListener('input', refresh);
+      inputLoss.addEventListener('input', refresh);
+    }
+
+    // ----------------------------------------------------
+    // 5. REGISTER WATCHER SIMULATOR
+    // ----------------------------------------------------
+    function renderRegisterSim(container) {
+      // Calculate Hex
+      let sum = 0;
+      simState.registerBits.forEach((val, idx) => {
+        if (val === 1) {
+          sum += Math.pow(2, 15 - idx);
+        }
+      });
+      const hex = '0x' + sum.toString(16).toUpperCase().padStart(4, '0');
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 4px;">GPIO MEMORY REGISTER FILE (GPIOA_ODR)</p>
+          <p style="font-size: 9px; color: #475569; margin-bottom: 8px;">Click bit blocks to flip states. Enable B5 to power the micro LED pin.</p>
+
+          <div class="bits-row" id="bits-grid">
+            ${simState.registerBits.map((val, idx) => `
+              <div class="bit-btn ${val === 1 ? 'active' : ''}" data-idx="${idx}">
+                <span class="bit-name">B${15 - idx}</span>
+                <span class="bit-val">${val}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="metric-row" style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.04);">
+          <div class="metric-item">
+            <div class="metric-title">Hex Register Word</div>
+            <div class="metric-value" style="color:var(--neon-yellow); font-size:16px;">${hex}</div>
+          </div>
+          <div class="metric-item" style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="metric-title">LED Micro Pin (B5)</div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${simState.registerBits[10] === 1 ? 'var(--neon-green)' : '#27272a'}; box-shadow:${simState.registerBits[10] === 1 ? '0 0 10px var(--neon-green)' : 'none'};"></span>
+              <span style="font-size:10px; font-weight:bold; color:#fff;">${simState.registerBits[10] === 1 ? 'HIGH' : 'LOW'}</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Event hook
+      document.querySelectorAll('#bits-grid .bit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(btn.getAttribute('data-idx'));
+          simState.registerBits[idx] = simState.registerBits[idx] === 1 ? 0 : 1;
+          renderRegisterSim(container);
+        });
+      });
+    }
+
+    // ----------------------------------------------------
+    // 6. RTOS TIMELINE PREEMPTIVE SCHEDULER
+    // ----------------------------------------------------
+    function renderRtosSim(container) {
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 8px;">THREAD PRIORITY KERNEL SETTINGS</p>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Task A Priority (Telemetry)</span><span>Lvl ${simState.priorityA}</span></div>
+            <input type="range" class="sim-range" min="1" max="4" step="1" id="rtos-prio-a" value="${simState.priorityA}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Task B Priority (Motor Driver)</span><span>Lvl ${simState.priorityB}</span></div>
+            <input type="range" class="sim-range" min="1" max="4" step="1" id="rtos-prio-b" value="${simState.priorityB}" />
+          </div>
+        </div>
+
+        <div style="height: 100px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: #000; display: flex; align-items: flex-end; padding: 8px; position: relative; overflow: hidden;" id="rtos-conveyor">
+          <!-- Lane indicators -->
+          <span style="position: absolute; left: 8px; top: 8px; font-size: 7px; color: var(--neon-red); font-weight:bold;">L1: WATCHDOG (L5)</span>
+          <span style="position: absolute; left: 8px; top: 40px; font-size: 7px; color: var(--neon-cyan); font-weight:bold;">L2: TASK B (L${simState.priorityB})</span>
+          <span style="position: absolute; left: 8px; top: 72px; font-size: 7px; color: var(--neon-yellow); font-weight:bold;">L3: TASK A (L${simState.priorityA})</span>
+
+          <!-- Sliding bars -->
+          <div style="display: flex; gap: 4px; align-items: flex-end; margin-left: auto; width: 150px; overflow: hidden; height: 100%; justify-content: flex-end;" id="rtos-bars">
+            <!-- Dynamic tick bars filled by interval timer -->
+          </div>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-item">
+            <div class="metric-title">Kernel System Ticks</div>
+            <div class="metric-value" id="rtos-ticks-count" style="color:var(--neon-green);">${simState.rtosTicks}</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-title">Scheduler Mode</div>
+            <div class="metric-value" style="color:var(--neon-cyan); font-size:11px;">PREEMPT KERNEL</div>
+          </div>
+        </div>
+      `;
+
+      // Event priority inputs
+      const sliderA = document.getElementById('rtos-prio-a');
+      const sliderB = document.getElementById('rtos-prio-b');
+
+      sliderA.addEventListener('input', () => {
+        simState.priorityA = parseInt(sliderA.value);
+        renderRtosSim(container);
+      });
+
+      sliderB.addEventListener('input', () => {
+        simState.priorityB = parseInt(sliderB.value);
+        renderRtosSim(container);
+      });
+
+      // Update Conveyor items
+      const updateConveyorUI = () => {
+        const barsBox = document.getElementById('rtos-bars');
+        if (!barsBox) return;
+
+        barsBox.innerHTML = simState.rtosHistory.map(h => {
+          let height = 12;
+          let col = "#27272a";
+          if (h.task === 'W') { height = 85; col = "var(--neon-red)"; }
+          else if (h.task === 'B') { height = 55; col = "var(--neon-cyan)"; }
+          else if (h.task === 'A') { height = 25; col = "var(--neon-yellow)"; }
+
+          return `
+            <div style="width: 8px; height: ${height}%; background: ${col}; border-radius: 4px 4px 0 0; flex-shrink: 0;"></div>
+          `;
+        }).join('');
+      };
+
+      updateConveyorUI();
+
+      // Interval Scheduler Simulation Loop
+      simState.rtosTimer = setInterval(() => {
+        simState.rtosTicks += 1;
+        let activeTask = "I"; // Idle
+
+        if (simState.rtosTicks % 7 === 0) {
+          activeTask = "W"; // high-prio watchdog
+        } else if (simState.priorityB > simState.priorityA) {
+          activeTask = "B";
+        } else if (simState.priorityA > simState.priorityB) {
+          activeTask = "A";
+        } else {
+          activeTask = simState.rtosTicks % 2 === 0 ? "A" : "B";
+        }
+
+        simState.rtosHistory.push({ time: simState.rtosTicks, task: activeTask });
+        if (simState.rtosHistory.length > 15) {
+          simState.rtosHistory.shift();
+        }
+
+        // update items
+        const ticksVal = document.getElementById('rtos-ticks-count');
+        if (ticksVal) ticksVal.textContent = simState.rtosTicks;
+        updateConveyorUI();
+      }, 500);
+    }
+
+    // ----------------------------------------------------
+    // 7. RTL CLOCK DOMAIN CROSSING BRIDGE
+    // ----------------------------------------------------
+    function renderRtlSim(container) {
+      const getStepLabel = () => {
+        switch (simState.cdcStep) {
+          case 0: return "IDLE // READY FOR DATA CROSS";
+          case 1: return "BINARY REGISTER STACK WRITTEN";
+          case 2: return "CONVERTED TO GRAY CODE";
+          case 3: return "SYNC REGISTER STAGE 1 FLOP";
+          case 4: return "SYNC REGISTER STAGE 2 FLOP";
+          case 5: return "STABLE CROSS COMPLETED";
+        }
+      };
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 4px;">CLOCK DOMAIN CROSSING STAGE</p>
+          <p style="font-size: 10px; color: #475569; margin-bottom: 12px;">Move data vectors cleanly across isolated async clock rails.</p>
+
+          <button class="action-button" id="btn-cdc-launch" ${simState.cdcStep !== 0 ? 'disabled style="border-color:#1e293b; color:#475569;"' : ''}>
+            ${simState.cdcStep === 0 ? 'Initiate Bus Transfer' : 'Processing crossing...'}
+          </button>
+        </div>
+
+        <div style="background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; margin-top: 12px;">
+          <div style="font-size: 8px; color: var(--neon-yellow); margin-bottom: 4px; text-transform: uppercase;">CROSSING PIPE PROGRESS STATUS</div>
+          <div style="font-size: 11px; font-weight: bold; color: #ffffff;" id="cdc-status-text">${getStepLabel()}</div>
+          
+          <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center; justify-content: space-between;">
+            <div style="text-align: center; border: 1px dashed rgba(255,255,255,0.1); padding: 8px; border-radius: 4px; flex: 1;">
+              <span style="font-size: 7px; color: #64748b; block;">DOMAIN A (100MHz)</span>
+              <span style="font-size: 12px; font-weight: bold; color:var(--neon-green);" id="cdc-val-a">${simState.cdcValue}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--neon-cyan); font-weight:bold;">▸ Gray Pipe ▸</div>
+            <div style="text-align: center; border: 1px dashed rgba(255,255,255,0.1); padding: 8px; border-radius: 4px; flex: 1;">
+              <span style="font-size: 7px; color: #64748b; block;">DOMAIN B (133MHz)</span>
+              <span style="font-size: 12px; font-weight: bold; color:${simState.cdcStep === 5 ? 'var(--neon-green)' : '#475569'};" id="cdc-val-b">${simState.cdcStep === 5 ? simState.cdcValue : '--'}</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const launchBtn = document.getElementById('btn-cdc-launch');
+      if (launchBtn) {
+        launchBtn.addEventListener('click', () => {
+          if (simState.cdcStep !== 0) return;
+          
+          // Step progress loop simulation
+          const setStep = (step) => {
+            simState.cdcStep = step;
+            const lbl = document.getElementById('cdc-status-text');
+            if (lbl) lbl.textContent = getStepLabel();
+            const bVal = document.getElementById('cdc-val-b');
+            if (bVal) bVal.textContent = simState.cdcStep === 5 ? simState.cdcValue : '--';
+            if (simState.cdcStep === 5) bVal.style.color = 'var(--neon-green)';
+          };
+
+          setStep(1);
+          setTimeout(() => setStep(2), 600);
+          setTimeout(() => setStep(3), 1200);
+          setTimeout(() => setStep(4), 1800);
+          setTimeout(() => setStep(5), 2400);
+          setTimeout(() => {
+            setStep(0);
+            simState.cdcValue = '0x' + Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, '0');
+            renderRtlSim(container);
+          }, 3500);
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // 8. STA SLACK TIMING SIMULATOR
+    // ----------------------------------------------------
+    function renderStaSim(container) {
+      const compute = () => {
+        let processScale = 1.0;
+        if (simState.siliconProcess === 'slow') processScale = 1.45;
+        if (simState.siliconProcess === 'fast') processScale = 0.72;
+
+        const voltageScale = 1.0 / (simState.coreVoltage + 0.01);
+        const tempScale = 1.0 + (simState.operatingTemp - 25) * 0.0035;
+
+        const cellDelay = 3.15 * processScale * voltageScale * tempScale;
+        const period = 5.0; // 5ns gate window clock
+        const setupSlack = period - cellDelay - 0.45;
+        const holdSlack = cellDelay - 0.25;
+
+        return {
+          delay: Math.round(cellDelay * 100) / 100,
+          setup: Math.round(setupSlack * 100) / 100,
+          hold: Math.round(holdSlack * 100) / 100
+        };
+      };
+
+      const metrics = compute();
+
+      container.innerHTML = `
+        <div style="text-align: left;">
+          <p style="font-size: 10px; color: #64748b; margin-bottom: 8px;">ENVIRONMENT CORNERS (PVT ANALYSIS)</p>
+
+          <div style="margin-bottom: 8px;">
+            <div class="slider-row"><span>Process Silicon Batch</span><span style="color:var(--neon-yellow);">${simState.siliconProcess.toUpperCase()}</span></div>
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <button class="action-button" id="btn-sta-slow" style="padding:4px; font-size:8px; ${simState.siliconProcess === 'slow' ? 'background:var(--neon-yellow); color:#000; border-color:var(--neon-yellow);' : ''}">Slow Batch</button>
+              <button class="action-button" id="btn-sta-typ" style="padding:4px; font-size:8px; ${simState.siliconProcess === 'typical' ? 'background:var(--neon-green); color:#000; border-color:var(--neon-green);' : ''}">Typical</button>
+              <button class="action-button" id="btn-sta-fast" style="padding:4px; font-size:8px; ${simState.siliconProcess === 'fast' ? 'background:var(--neon-cyan); color:#000; border-color:var(--neon-cyan);' : ''}">Fast Batch</button>
+            </div>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Core Regulator Voltage (Vdd)</span><span>${simState.coreVoltage} V</span></div>
+            <input type="range" class="sim-range" min="0.75" max="1.30" step="0.05" id="slider-vdd" value="${simState.coreVoltage}" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row"><span>Operating Substrate Temp</span><span>${simState.operatingTemp} °C</span></div>
+            <input type="range" class="sim-range" min="-40" max="125" step="5" id="slider-temp" value="${simState.operatingTemp}" />
+          </div>
+        </div>
+
+        <div class="metric-row" style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
+          <div style="text-align: left;">
+            <span style="font-size: 7px; color: #64748b; block;">Setup Timing Slack Margin</span>
+            <span style="font-size: 13px; font-weight: bold; display:block; color:${metrics.setup >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">${metrics.setup} ns</span>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-size: 7px; color: #64748b; block;">Hold Timing Slack Margin</span>
+            <span style="font-size: 13px; font-weight: bold; display:block; color:${metrics.hold >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">${metrics.hold} ns</span>
+          </div>
+        </div>
+      `;
+
+      // Hookups
+      const vdd = document.getElementById('slider-vdd');
+      const temp = document.getElementById('slider-temp');
+
+      const refresh = () => {
+        simState.coreVoltage = parseFloat(vdd.value);
+        simState.operatingTemp = parseInt(temp.value);
+        renderStaSim(container);
+      };
+
+      vdd.addEventListener('input', refresh);
+      temp.addEventListener('input', refresh);
+
+      document.getElementById('btn-sta-slow').addEventListener('click', () => {
+        simState.siliconProcess = 'slow';
+        renderStaSim(container);
+      });
+      document.getElementById('btn-sta-typ').addEventListener('click', () => {
+        simState.siliconProcess = 'typical';
+        renderStaSim(container);
+      });
+      document.getElementById('btn-sta-fast').addEventListener('click', () => {
+        simState.siliconProcess = 'fast';
+        renderStaSim(container);
+      });
+    }
+  </script>
+</body>
+</html>
